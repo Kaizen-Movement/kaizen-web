@@ -1,230 +1,183 @@
+// Generated from the curated Supabase catalog. Kept as an offline/failure fallback.
 window.KAIZEN_PRODUCTS = [
   {
-    "name": "Adaptive body",
-    "price": 15,
-    "slug": "adaptive-body",
-    "category": "Improvement"
-  },
-  {
-    "name": "Alignment",
-    "price": 15,
-    "slug": "alignment",
-    "category": "Lifestyle"
-  },
-  {
-    "name": "Alter Ego",
-    "price": 20,
-    "slug": "alter-ego",
-    "category": "Success"
-  },
-  {
-    "name": "Amor Magnetica",
-    "price": 25,
-    "slug": "amor-magnetica",
-    "category": "Attraction"
-  },
-  {
-    "name": "Aura",
-    "price": 20,
-    "slug": "aura",
-    "category": "Lifestyle"
-  },
-  {
-    "name": "Bachelor Life",
-    "price": 18,
-    "slug": "bachelor-life",
-    "category": "Lifestyle"
-  },
-  {
-    "name": "Bulk",
-    "price": 18,
-    "slug": "bulk",
-    "category": "Improvement"
-  },
-  {
-    "name": "Charisma",
-    "price": 15,
-    "slug": "charisma",
-    "category": "Success"
-  },
-  {
-    "name": "Dark Magnetism",
+    "slug": "Online-Attraction",
+    "name": "Digital Attraction",
     "price": 28,
-    "slug": "dark-magnetism",
-    "category": "Attraction"
+    "category": "Attraction",
+    "description": "Your profile should feel like an extension of your presence, not a page you hope gets noticed. Digital Attraction is Kaizen's flagship 19+ program for men who want to show up online with more confidence, composure, and intention. It is designed to reinforce a magnetic digital self-concept: posting without hesitation, presenting yourself cleanly, messaging without overthinking, and carrying the same calm energy online that you want to embody in real life.\n\nThis is not about chasing attention or becoming someone fake. It is about removing needy habits, sharpening your presentation, and building the kind of online presence that feels naturally attractive because it is grounded in self-respect.",
+    "image_url": "/product-placeholder.jpg",
+    "sort_order": 1,
+    "is_featured": true,
+    "compare_at_price_cents": 3500,
+    "flagship": true
   },
   {
-    "name": "DHT",
-    "price": 20,
-    "slug": "dht",
-    "category": "Improvement"
-  },
-  {
-    "name": "Enlargement",
-    "price": 25,
-    "slug": "enlargement",
-    "category": "Improvement"
-  },
-  {
-    "name": "Extreeme Female Attention",
-    "price": 25,
-    "slug": "extreeme-female-attention",
-    "category": "Attraction"
-  },
-  {
-    "name": "Fatel Attraction UG",
-    "price": 18,
-    "slug": "fatel-attraction-ug",
-    "category": "Attraction"
-  },
-  {
+    "slug": "the-final-red-room",
     "name": "Final Red Room",
-    "price": 60,
-    "slug": "final-red-room",
-    "category": "Attraction"
+    "price": 30,
+    "category": "Attraction",
+    "description": "Final Red Room is the closing chapter of Kaizen's most intimate 19+ attraction concept. It is designed for the man who wants sensual confidence without loud performance: relaxed eye contact, grounded body language, emotional control, and the ability to stay present when chemistry becomes real.\n\nThe focus is not control over another person. The focus is control over your own energy. This program supports a private, mature self-concept built around consent, confidence, calm desire, and the feeling that you belong in the moment instead of trying to prove yourself.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KAIZENSUBLIMINALS_7.png?v=1764550280",
+    "sort_order": 2,
+    "is_featured": false,
+    "compare_at_price_cents": null,
+    "flagship": false
   },
   {
-    "name": "Forex Trader",
-    "price": 15,
-    "slug": "forex-trader",
-    "category": "Success"
-  },
-  {
-    "name": "Gf Attract",
-    "price": 20,
-    "slug": "gf-attract",
-    "category": "Attraction"
-  },
-  {
-    "name": "Golden Vault",
-    "price": 35,
-    "slug": "golden-vault",
-    "category": "Success"
-  },
-  {
-    "name": "Growth Plates",
-    "price": 15,
-    "slug": "growth-plates",
-    "category": "Improvement"
-  },
-  {
-    "name": "GV Business",
-    "price": 20,
-    "slug": "gv-business",
-    "category": "Success"
-  },
-  {
-    "name": "Kaizen Enlargement",
+    "slug": "dark-magnetism",
+    "name": "Dark Magnetism",
     "price": 25,
-    "slug": "kaizen-enlargement",
-    "category": "Improvement"
+    "category": "Attraction",
+    "description": "Dark Magnetism is for the man who does not need to dominate every conversation to command attention. This premium 19+ subliminal is designed to reinforce composure, emotional control, deliberate movement, and a quiet sense of mystery.\n\nInstead of forcing charisma, you build contrast: fewer nervous reactions, stronger boundaries, better eye contact, and a presence that feels intentional. The result you are working toward is simple - becoming more memorable because you are centered, not because you are trying too hard.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/rn-image_picker_lib_temp_7ce5389f-6b9d-4e27-917d-f56d50994861.png?v=1774533690",
+    "sort_order": 3,
+    "is_featured": false,
+    "compare_at_price_cents": 3000,
+    "flagship": false
   },
   {
-    "name": "Machiavellian",
-    "price": 25,
-    "slug": "machiavellian",
-    "category": "Success"
+    "slug": "extreme-female-attraction",
+    "name": "Extreme Female Attention",
+    "price": 24,
+    "category": "Attraction",
+    "description": "Extreme Female Attention is a high-intensity attraction program built around one principle: you become more noticeable when you stop shrinking yourself. It is designed to support visible confidence, decisive social energy, stronger grooming and presentation habits, and a willingness to enter conversations without mentally rejecting yourself first.\n\nNo audio can guarantee another person's response. This program focuses on what you control - your self-image, your standards, your actions, and the confidence you bring into real interactions.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/femaleatt.png?v=1769010018",
+    "sort_order": 4,
+    "is_featured": false,
+    "compare_at_price_cents": 3000,
+    "flagship": false
   },
   {
-    "name": "Muscle growth",
-    "price": 20,
-    "slug": "muscle-growth",
-    "category": "Improvement"
-  },
-  {
-    "name": "New folder",
-    "price": 25,
-    "slug": "new-folder",
-    "category": "Lifestyle"
-  },
-  {
-    "name": "No Fear Talking To Females",
-    "price": 18,
-    "slug": "no-fear-talking-to-females",
-    "category": "Attraction"
-  },
-  {
-    "name": "often roster",
-    "price": 25,
-    "slug": "often-roster",
-    "category": "Lifestyle"
-  },
-  {
-    "name": "Playboy",
-    "price": 25,
-    "slug": "playboy",
-    "category": "Attraction"
-  },
-  {
-    "name": "Polymath",
-    "price": 18,
-    "slug": "polymath",
-    "category": "Success"
-  },
-  {
-    "name": "Prime Time",
-    "price": 28,
-    "slug": "prime-time",
-    "category": "Success"
-  },
-  {
-    "name": "Purest Female Attraction",
-    "price": 35,
-    "slug": "purest-female-attraction",
-    "category": "Attraction"
-  },
-  {
-    "name": "S Appeal",
-    "price": 20,
-    "slug": "s-appeal",
-    "category": "Attraction"
-  },
-  {
-    "name": "Silk Tongue",
-    "price": 18,
-    "slug": "silk-tongue",
-    "category": "Success"
-  },
-  {
+    "slug": "no-fear-talking-to-women",
     "name": "Smooth Talker",
-    "price": 20,
-    "slug": "smooth-talker",
-    "category": "Success"
+    "price": 22,
+    "category": "Attraction",
+    "description": "Smooth Talker is designed for the moments when your mind usually moves faster than your mouth. This 19+ program supports relaxed conversation, clearer expression, active listening, playful confidence, and the ability to stay present instead of searching for the perfect line.\n\nReal charm is not a script. It is the combination of attention, timing, self-trust, and respect. Smooth Talker helps reinforce that foundation so conversations can feel more natural, mutual, and enjoyable.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore.png?v=1769497513",
+    "sort_order": 5,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
   },
   {
-    "name": "SnowBunny",
-    "price": 20,
-    "slug": "snowbunny",
-    "category": "Attraction"
+    "slug": "the-golden-vault",
+    "name": "The Golden Vault",
+    "price": 28,
+    "category": "Lifestyle",
+    "description": "The Golden Vault is Kaizen's flagship Lifestyle program for men building a bigger financial life. It is designed to reinforce an abundance-oriented identity without fantasy: noticing opportunities, thinking longer term, protecting your attention, making cleaner decisions, and acting with the discipline required to create value.\n\nThis is not a promise of money or investment results. It is a premium mindset system for replacing scarcity-driven hesitation with focused ambition, responsible confidence, and consistent execution.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KAIZENSUBLIMINALS_3_bd142f84-565a-4759-866b-9e25312bc2bc.png?v=1764728154",
+    "sort_order": 1,
+    "is_featured": true,
+    "compare_at_price_cents": 3500,
+    "flagship": true
   },
   {
-    "name": "Social",
-    "price": 15,
-    "slug": "social",
-    "category": "Success"
-  },
-  {
-    "name": "The Man",
-    "price": 40,
-    "slug": "the-man",
-    "category": "Success"
-  },
-  {
-    "name": "Thirst Trap",
+    "slug": "business-success-golden-vault",
+    "name": "Golden Vault: Business Success",
     "price": 25,
-    "slug": "thirst-trap",
-    "category": "Attraction"
+    "category": "Lifestyle",
+    "description": "Golden Vault: Business Success takes the core Golden Vault mindset into the arena of business. It is designed for founders, freelancers, sellers, and builders who need the confidence to make offers, follow up, solve problems, and keep executing when results are not immediate.\n\nIt does not guarantee revenue. It supports the mindset behind revenue-producing behavior: value creation, resilient selling, decisive leadership, and the discipline to finish what you start.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/bsucc.png?v=1769009197",
+    "sort_order": 2,
+    "is_featured": false,
+    "compare_at_price_cents": 3000,
+    "flagship": false
   },
   {
-    "name": "Playboy Era",
-    "price": 45,
-    "slug": "playboy-era",
-    "category": "Attraction"
+    "slug": "life-of-a-bachelor",
+    "name": "Life of a Bachelor",
+    "price": 22,
+    "category": "Lifestyle",
+    "description": "Life of a Bachelor is built for the season where your life belongs fully to you. This premium 19+ program supports independence, social confidence, stronger standards, a richer personal routine, and the ability to enjoy dating without losing your direction.\n\nThe point is not emotional distance. It is self-leadership: building a life that already feels full, protecting your goals, and choosing relationships from desire rather than loneliness or pressure.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore_7.png?v=1766982850",
+    "sort_order": 3,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
   },
   {
-    "name": "Three Ways To Attraction",
-    "price": 50,
-    "slug": "three-ways-to-attraction",
-    "category": "Attraction"
+    "slug": "everything-fallin-into-place",
+    "name": "Reality Alignment",
+    "price": 20,
+    "category": "Lifestyle",
+    "description": "Reality Alignment is designed for periods when life feels scattered, delayed, or heavier than it should. This premium program supports mental clarity, emotional regulation, consistent action, and the ability to notice progress without obsessing over perfect timing.\n\nIt is not a guarantee that events will magically rearrange themselves. It is a mindset aid for becoming the version of you who can see the next move, take it, and build momentum until life starts to feel coherent again.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore_12.png?v=1766985758",
+    "sort_order": 4,
+    "is_featured": false,
+    "compare_at_price_cents": 2500,
+    "flagship": false
+  },
+  {
+    "slug": "profitable-trader",
+    "name": "Profitable Trader",
+    "price": 22,
+    "category": "Lifestyle",
+    "description": "Profitable Trader is built for the mental side of markets: patience, discipline, emotional control, process focus, and respect for risk. Use it at a low, comfortable volume while backtesting, journaling, studying, or preparing for a session.\n\nNo subliminal can predict markets or guarantee profit. Trading involves real financial risk. This program is designed only to support the habits that serious traders repeatedly practice - following a plan, avoiding impulsive decisions, accepting losses, and protecting capital.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/c3ee842183f104461166e70955c8353d.jpg?v=1765490315",
+    "sort_order": 5,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
+  },
+  {
+    "slug": "the-alter-ego",
+    "name": "The Alter Ego",
+    "price": 28,
+    "category": "Improvement",
+    "description": "The Alter Ego is Kaizen's flagship Self Improvement program for the gap between who you are now and the version of you that already knows how to move. It is designed to help you define that identity, rehearse it mentally, and access its standards when hesitation, fear, or old programming tries to take control.\n\nThis is not an escape from yourself. It is a deliberate identity protocol: clearer standards, faster decisions, stronger discipline, and repeated action until your higher-performance state stops feeling like an act and starts feeling familiar.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/rn-image_picker_lib_temp_56bc033e-ee7b-494d-802a-9ed1d013296f.jpg?v=1772889974",
+    "sort_order": 1,
+    "is_featured": true,
+    "compare_at_price_cents": 3500,
+    "flagship": true
+  },
+  {
+    "slug": "charisma",
+    "name": "Charisma",
+    "price": 22,
+    "category": "Improvement",
+    "description": "Charisma is not volume, tricks, or constant performance. It is the ability to make people feel your attention while remaining secure in your own frame. This premium program is designed to reinforce warm confidence, expressive communication, emotional steadiness, and the social awareness to know when to lead and when to listen.\n\nUse it to support a more open, memorable presence in work, friendship, networking, and dating - without becoming fake, loud, or approval-driven.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore_9.png?v=1766983079",
+    "sort_order": 2,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
+  },
+  {
+    "slug": "kaizen-penis-enlargement",
+    "name": "Peak Vitality",
+    "price": 25,
+    "category": "Improvement",
+    "description": "Peak Vitality is a 19+ mindset program centered on how you feel in your body and how consistently you take care of it. It is designed to support body confidence, disciplined routines, healthier self-respect, energy-oriented habits, and a more secure masculine self-concept.\n\nThis audio is not medical treatment and does not promise physical changes. It works best as a mindset companion to sleep, movement, nutrition, responsible healthcare, and consistent real-world habits.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore_21.png?v=1767839292",
+    "sort_order": 3,
+    "is_featured": false,
+    "compare_at_price_cents": 3000,
+    "flagship": false
+  },
+  {
+    "slug": "polymath-subliminal",
+    "name": "Polymath",
+    "price": 22,
+    "category": "Improvement",
+    "description": "Polymath is designed for builders, creators, students, and entrepreneurs who refuse to be trapped in one lane. This premium program supports curiosity, sustained focus, confident learning, mental flexibility, and the habit of connecting knowledge across different subjects.\n\nIt will not replace study or practice. It is built to reinforce the identity and routines behind broad competence: asking better questions, staying with difficult material, and turning information into usable insight.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/KaizenStore_17.png?v=1767145870",
+    "sort_order": 4,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
+  },
+  {
+    "slug": "complete-enlargement",
+    "name": "Unshakable Self-Concept",
+    "price": 22,
+    "category": "Improvement",
+    "description": "Unshakable Self-Concept is for the man who is tired of letting a room, a rejection, or a bad day decide his value. This premium program is designed to reinforce internal validation, stable confidence, emotional resilience, and a grounded sense of identity.\n\nThe goal is not arrogance. It is consistency - knowing who you are before praise arrives, holding your standards when pressure rises, and recovering faster when life does not go your way.",
+    "image_url": "https://cdn.shopify.com/s/files/1/0644/4492/3979/files/penis-anatomy.webp?v=1764634405",
+    "sort_order": 5,
+    "is_featured": false,
+    "compare_at_price_cents": 2700,
+    "flagship": false
   }
 ];
