@@ -1,0 +1,2059 @@
+From c19dfad980e444a88995b72ca4e0502eb6f9f216 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 1 Sep 2026 21:56:42 +0000
+Subject: [PATCH] Add analytics dashboard, membership admin, and member portal
+ with audio player
+
+- Full analytics page with traffic charts, hourly heatmap, device/browser/country breakdowns, and time range filters
+- Enhanced admin dashboard with revenue, orders, views, and member stats
+- Client-side analytics tracker with session tracking and UTM support
+- Membership admin page showing plans, subscribers, and revenue stats
+- Member auth (login/signup) with Supabase auth and member profile creation
+- Member library page displaying purchased audio with cover art
+- Built-in audio player with play/pause, seek, progress bar, and auto-save playback position
+- Streaming API with access control (verifies library ownership before serving signed R2 URLs)
+- Member account page showing profile, membership status, and library stats
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ app/admin/(protected)/analytics/page.tsx   | 285 ++++++++++++++++++
+ app/admin/(protected)/layout.tsx           |   2 +
+ app/admin/(protected)/memberships/page.tsx | 194 +++++++++++++
+ app/admin/(protected)/page.tsx             | 141 +++++----
+ app/api/admin/analytics/route.ts           | 115 ++++++++
+ app/api/admin/memberships/route.ts         |  87 ++++++
+ app/api/analytics/track/route.ts           |  68 +++++
+ app/api/members/library/route.ts           |  86 ++++++
+ app/api/members/progress/route.ts          |  41 +++
+ app/api/members/stream/route.ts            |  46 +++
+ app/layout.tsx                             |   3 +
+ app/members/(protected)/account/page.tsx   | 106 +++++++
+ app/members/(protected)/layout.tsx         |  54 ++++
+ app/members/(protected)/library/page.tsx   | 321 +++++++++++++++++++++
+ app/members/login/page.tsx                 |  73 +++++
+ app/members/page.tsx                       |   5 +
+ app/members/signup/page.tsx                |  86 ++++++
+ components/AnalyticsTracker.tsx            |  48 +++
+ lib/actions/member-auth.ts                 |  67 +++++
+ 19 files changed, 1778 insertions(+), 50 deletions(-)
+ create mode 100644 app/admin/(protected)/analytics/page.tsx
+ create mode 100644 app/admin/(protected)/memberships/page.tsx
+ create mode 100644 app/api/admin/analytics/route.ts
+ create mode 100644 app/api/admin/memberships/route.ts
+ create mode 100644 app/api/analytics/track/route.ts
+ create mode 100644 app/api/members/library/route.ts
+ create mode 100644 app/api/members/progress/route.ts
+ create mode 100644 app/api/members/stream/route.ts
+ create mode 100644 app/members/(protected)/account/page.tsx
+ create mode 100644 app/members/(protected)/layout.tsx
+ create mode 100644 app/members/(protected)/library/page.tsx
+ create mode 100644 app/members/login/page.tsx
+ create mode 100644 app/members/page.tsx
+ create mode 100644 app/members/signup/page.tsx
+ create mode 100644 components/AnalyticsTracker.tsx
+ create mode 100644 lib/actions/member-auth.ts
+
+diff --git a/app/admin/(protected)/analytics/page.tsx b/app/admin/(protected)/analytics/page.tsx
+new file mode 100644
+index 0000000..a567b21
+--- /dev/null
++++ b/app/admin/(protected)/analytics/page.tsx
+@@ -0,0 +1,285 @@
++"use client";
++
++import { useEffect, useState } from "react";
++
++interface AnalyticsData {
++  totalViews: number;
++  uniqueSessions: number;
++  dailyViews: { date: string; views: number; visitors: number }[];
++  hourlyViews: { hour: number; count: number }[];
++  topCountries: { country: string; count: number }[];
++  topPages: { path: string; count: number }[];
++  devices: { type: string; count: number }[];
++  browsers: { name: string; count: number }[];
++}
++
++const COUNTRY_NAMES: Record<string, string> = {
++  US: "United States", GB: "United Kingdom", ZA: "South Africa", CA: "Canada",
++  AU: "Australia", DE: "Germany", FR: "France", NG: "Nigeria", IN: "India",
++  BR: "Brazil", JP: "Japan", KE: "Kenya", GH: "Ghana", NL: "Netherlands",
++  SE: "Sweden", Unknown: "Unknown",
++};
++
++function BarChart({ data, maxVal }: { data: { label: string; value: number }[]; maxVal: number }) {
++  return (
++    <div className="space-y-2">
++      {data.map((d) => (
++        <div key={d.label} className="flex items-center gap-3">
++          <span className="w-20 shrink-0 truncate font-mono text-[11px] text-bone/50">{d.label}</span>
++          <div className="flex-1">
++            <div
++              className="h-5 rounded-sm bg-gradient-to-r from-crimson/60 to-crimson/30"
++              style={{ width: `${Math.max(2, (d.value / maxVal) * 100)}%` }}
++            />
++          </div>
++          <span className="w-10 text-right font-mono text-[11px] text-bone/70">{d.value}</span>
++        </div>
++      ))}
++    </div>
++  );
++}
++
++function MiniLineChart({ data }: { data: { date: string; views: number; visitors: number }[] }) {
++  if (data.length === 0) return <p className="text-sm text-bone/30">No data yet</p>;
++
++  const maxViews = Math.max(...data.map((d) => d.views), 1);
++  const chartH = 160;
++  const chartW = 600;
++  const stepX = chartW / Math.max(data.length - 1, 1);
++
++  const viewsPoints = data.map((d, i) => `${i * stepX},${chartH - (d.views / maxViews) * chartH}`).join(" ");
++  const visitorsPoints = data.map((d, i) => `${i * stepX},${chartH - (d.visitors / maxViews) * chartH}`).join(" ");
++
++  return (
++    <div className="overflow-x-auto">
++      <svg viewBox={`0 0 ${chartW} ${chartH + 30}`} className="w-full min-w-[400px]" preserveAspectRatio="none">
++        {/* Grid lines */}
++        {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
++          <line
++            key={pct}
++            x1={0} y1={chartH - pct * chartH} x2={chartW} y2={chartH - pct * chartH}
++            stroke="rgba(255,255,255,0.06)" strokeWidth="1"
++          />
++        ))}
++        {/* Views line */}
++        <polyline points={viewsPoints} fill="none" stroke="#3AA9D6" strokeWidth="2" />
++        {/* Visitors line */}
++        <polyline points={visitorsPoints} fill="none" stroke="#AEDCEA" strokeWidth="2" strokeDasharray="4 3" />
++        {/* Date labels */}
++        {data.map((d, i) => {
++          if (data.length > 14 && i % Math.ceil(data.length / 7) !== 0) return null;
++          return (
++            <text
++              key={d.date}
++              x={i * stepX}
++              y={chartH + 18}
++              fill="rgba(234,243,247,0.3)"
++              fontSize="10"
++              textAnchor="middle"
++              fontFamily="monospace"
++            >
++              {d.date.slice(5)}
++            </text>
++          );
++        })}
++      </svg>
++      <div className="mt-2 flex gap-6 font-mono text-[10px] text-bone/40">
++        <span className="flex items-center gap-1.5">
++          <span className="inline-block h-0.5 w-4 bg-crimson" /> Page Views
++        </span>
++        <span className="flex items-center gap-1.5">
++          <span className="inline-block h-0.5 w-4 border-t border-dashed border-gold" /> Unique Visitors
++        </span>
++      </div>
++    </div>
++  );
++}
++
++function HourlyHeatmap({ data }: { data: { hour: number; count: number }[] }) {
++  const max = Math.max(...data.map((d) => d.count), 1);
++  return (
++    <div className="flex gap-1">
++      {data.map((d) => {
++        const intensity = d.count / max;
++        return (
++          <div key={d.hour} className="flex flex-col items-center gap-1">
++            <div
++              className="h-10 w-5 rounded-sm"
++              style={{
++                backgroundColor: `rgba(58, 169, 214, ${Math.max(0.05, intensity)})`,
++              }}
++              title={`${d.hour}:00 — ${d.count} views`}
++            />
++            <span className="font-mono text-[8px] text-bone/30">
++              {d.hour % 6 === 0 ? `${d.hour}` : ""}
++            </span>
++          </div>
++        );
++      })}
++    </div>
++  );
++}
++
++export default function AdminAnalyticsPage() {
++  const [data, setData] = useState<AnalyticsData | null>(null);
++  const [range, setRange] = useState("7d");
++  const [loading, setLoading] = useState(true);
++
++  useEffect(() => {
++    setLoading(true);
++    fetch(`/api/admin/analytics?range=${range}`)
++      .then((r) => r.json())
++      .then((d) => {
++        setData(d);
++        setLoading(false);
++      })
++      .catch(() => setLoading(false));
++  }, [range]);
++
++  const ranges = [
++    { value: "24h", label: "24h" },
++    { value: "7d", label: "7 days" },
++    { value: "30d", label: "30 days" },
++    { value: "90d", label: "90 days" },
++  ];
++
++  return (
++    <div>
++      <div className="flex items-end justify-between">
++        <div>
++          <p className="eyebrow mb-2">Intelligence</p>
++          <h1 className="font-display text-3xl text-bone">Analytics</h1>
++        </div>
++        <div className="flex gap-1">
++          {ranges.map((r) => (
++            <button
++              key={r.value}
++              onClick={() => setRange(r.value)}
++              className={`px-3 py-1.5 font-mono text-[11px] uppercase tracking-eyebrow transition-colors ${
++                range === r.value
++                  ? "bg-crimson text-void"
++                  : "border border-white/10 text-bone/50 hover:text-gold"
++              }`}
++            >
++              {r.label}
++            </button>
++          ))}
++        </div>
++      </div>
++
++      {loading ? (
++        <div className="mt-12 text-center text-bone/30">Loading analytics...</div>
++      ) : !data ? (
++        <div className="mt-12 text-center text-bone/30">Failed to load</div>
++      ) : (
++        <>
++          {/* Summary cards */}
++          <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-4">
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Total Views</p>
++              <p className="mt-2 font-display text-3xl text-gold">{data.totalViews.toLocaleString()}</p>
++            </div>
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Unique Visitors</p>
++              <p className="mt-2 font-display text-3xl text-gold">{data.uniqueSessions.toLocaleString()}</p>
++            </div>
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Countries</p>
++              <p className="mt-2 font-display text-3xl text-gold">{data.topCountries.length}</p>
++            </div>
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Pages Visited</p>
++              <p className="mt-2 font-display text-3xl text-gold">{data.topPages.length}</p>
++            </div>
++          </div>
++
++          {/* Traffic chart */}
++          <div className="mt-8 border border-white/10 bg-charcoal p-6">
++            <p className="mb-6 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Traffic Over Time
++            </p>
++            <MiniLineChart data={data.dailyViews} />
++          </div>
++
++          <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
++            {/* Hourly heatmap */}
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="mb-4 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++                Traffic by Hour (UTC)
++              </p>
++              <HourlyHeatmap data={data.hourlyViews} />
++            </div>
++
++            {/* Device breakdown */}
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="mb-4 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++                Devices
++              </p>
++              <div className="flex gap-6">
++                {data.devices.map((d) => {
++                  const pct = data.totalViews ? Math.round((d.count / data.totalViews) * 100) : 0;
++                  return (
++                    <div key={d.type} className="text-center">
++                      <p className="font-display text-2xl text-gold">{pct}%</p>
++                      <p className="mt-1 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">
++                        {d.type}
++                      </p>
++                    </div>
++                  );
++                })}
++              </div>
++            </div>
++
++            {/* Top countries */}
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="mb-4 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++                Top Countries
++              </p>
++              <BarChart
++                data={data.topCountries.map((c) => ({
++                  label: COUNTRY_NAMES[c.country] || c.country,
++                  value: c.count,
++                }))}
++                maxVal={data.topCountries[0]?.count || 1}
++              />
++            </div>
++
++            {/* Top pages */}
++            <div className="border border-white/10 bg-charcoal p-6">
++              <p className="mb-4 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++                Top Pages
++              </p>
++              <BarChart
++                data={data.topPages.map((p) => ({
++                  label: p.path === "/" ? "Homepage" : p.path,
++                  value: p.count,
++                }))}
++                maxVal={data.topPages[0]?.count || 1}
++              />
++            </div>
++
++            {/* Browsers */}
++            <div className="border border-white/10 bg-charcoal p-6 lg:col-span-2">
++              <p className="mb-4 font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++                Browsers
++              </p>
++              <div className="flex flex-wrap gap-6">
++                {data.browsers.map((b) => {
++                  const pct = data.totalViews ? Math.round((b.count / data.totalViews) * 100) : 0;
++                  return (
++                    <div key={b.name} className="text-center">
++                      <p className="font-display text-xl text-gold">{pct}%</p>
++                      <p className="mt-1 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">
++                        {b.name}
++                      </p>
++                    </div>
++                  );
++                })}
++              </div>
++            </div>
++          </div>
++        </>
++      )}
++    </div>
++  );
++}
+diff --git a/app/admin/(protected)/layout.tsx b/app/admin/(protected)/layout.tsx
+index edda14c..726cc43 100644
+--- a/app/admin/(protected)/layout.tsx
++++ b/app/admin/(protected)/layout.tsx
+@@ -6,6 +6,7 @@ import { SealMark } from "@/components/SealMark";
+ 
+ const NAV = [
+   { label: "Dashboard", href: "/admin" },
++  { label: "Analytics", href: "/admin/analytics" },
+   { label: "Products", href: "/admin/products" },
+   { label: "Bulk Upload", href: "/admin/bulk-upload" },
+   { label: "Media Library", href: "/admin/media" },
+@@ -13,6 +14,7 @@ const NAV = [
+   { label: "Orders", href: "/admin/orders" },
+   { label: "Abandoned Checkouts", href: "/admin/abandoned-checkouts" },
+   { label: "Customers", href: "/admin/customers" },
++  { label: "Memberships", href: "/admin/memberships" },
+   { label: "Homepage", href: "/admin/homepage" },
+ ];
+ 
+diff --git a/app/admin/(protected)/memberships/page.tsx b/app/admin/(protected)/memberships/page.tsx
+new file mode 100644
+index 0000000..e4f87b3
+--- /dev/null
++++ b/app/admin/(protected)/memberships/page.tsx
+@@ -0,0 +1,194 @@
++"use client";
++
++import { useEffect, useState } from "react";
++import Link from "next/link";
++
++interface MembershipPlan {
++  id: string;
++  slug: string;
++  name: string;
++  description: string | null;
++  price_cents: number;
++  interval: string;
++  features: string[];
++  is_active: boolean;
++  sort_order: number;
++}
++
++interface MemberRow {
++  id: string;
++  email: string;
++  display_name: string | null;
++  membership_status: string;
++  plan_name: string | null;
++  plan_interval: string | null;
++  membership_started_at: string | null;
++  membership_expires_at: string | null;
++  total_spent_cents: number;
++  library_count: number;
++  created_at: string;
++}
++
++interface MembershipsData {
++  plans: MembershipPlan[];
++  members: MemberRow[];
++  stats: {
++    totalMembers: number;
++    activeMembers: number;
++    monthlyRevenue: number;
++    lifetimeMembers: number;
++  };
++}
++
++function StatusBadge({ status }: { status: string }) {
++  const colors: Record<string, string> = {
++    active: "bg-emerald-500/20 text-emerald-400",
++    inactive: "bg-white/5 text-bone/40",
++    cancelled: "bg-amber-500/20 text-amber-400",
++    past_due: "bg-red-500/20 text-red-400",
++  };
++  return (
++    <span className={`inline-block rounded px-2 py-0.5 font-mono text-[10px] uppercase ${colors[status] || colors.inactive}`}>
++      {status}
++    </span>
++  );
++}
++
++export default function MembershipsPage() {
++  const [data, setData] = useState<MembershipsData | null>(null);
++  const [loading, setLoading] = useState(true);
++  const [tab, setTab] = useState<"members" | "plans">("members");
++
++  useEffect(() => {
++    fetch("/api/admin/memberships")
++      .then((r) => r.json())
++      .then((d) => { setData(d); setLoading(false); })
++      .catch(() => setLoading(false));
++  }, []);
++
++  if (loading) return <div className="mt-12 text-center text-bone/30">Loading...</div>;
++  if (!data) return <div className="mt-12 text-center text-bone/30">Failed to load</div>;
++
++  return (
++    <div>
++      <div className="flex items-end justify-between">
++        <div>
++          <p className="eyebrow mb-2">Members</p>
++          <h1 className="font-display text-3xl text-bone">Memberships</h1>
++        </div>
++      </div>
++
++      {/* Stats */}
++      <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-4">
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Total Members</p>
++          <p className="mt-2 font-display text-3xl text-gold">{data.stats.totalMembers}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Active</p>
++          <p className="mt-2 font-display text-3xl text-gold">{data.stats.activeMembers}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Est. Monthly Rev</p>
++          <p className="mt-2 font-display text-3xl text-gold">${(data.stats.monthlyRevenue / 100).toFixed(2)}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Lifetime Members</p>
++          <p className="mt-2 font-display text-3xl text-gold">{data.stats.lifetimeMembers}</p>
++        </div>
++      </div>
++
++      {/* Tabs */}
++      <div className="mt-8 flex gap-1 border-b border-white/10">
++        {(["members", "plans"] as const).map((t) => (
++          <button
++            key={t}
++            onClick={() => setTab(t)}
++            className={`px-4 py-2.5 font-mono text-[11px] uppercase tracking-eyebrow transition-colors ${
++              tab === t ? "border-b-2 border-gold text-gold" : "text-bone/40 hover:text-bone/70"
++            }`}
++          >
++            {t}
++          </button>
++        ))}
++      </div>
++
++      {tab === "members" && (
++        <div className="mt-6">
++          {data.members.length === 0 ? (
++            <p className="py-12 text-center text-bone/30">No members yet</p>
++          ) : (
++            <div className="overflow-x-auto">
++              <table className="w-full text-left">
++                <thead>
++                  <tr className="border-b border-white/10">
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Member</th>
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Status</th>
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Plan</th>
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Library</th>
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Spent</th>
++                    <th className="pb-3 font-mono text-[10px] uppercase tracking-eyebrow text-bone/40">Joined</th>
++                  </tr>
++                </thead>
++                <tbody>
++                  {data.members.map((m) => (
++                    <tr key={m.id} className="border-b border-white/5 transition-colors hover:bg-charcoal/50">
++                      <td className="py-3">
++                        <p className="text-sm text-bone">{m.display_name || "—"}</p>
++                        <p className="font-mono text-[10px] text-bone/40">{m.email}</p>
++                      </td>
++                      <td className="py-3"><StatusBadge status={m.membership_status} /></td>
++                      <td className="py-3 font-mono text-[11px] text-bone/60">
++                        {m.plan_name ? `${m.plan_name} (${m.plan_interval})` : "—"}
++                      </td>
++                      <td className="py-3 font-mono text-[11px] text-gold">{m.library_count} items</td>
++                      <td className="py-3 font-mono text-[11px] text-bone/60">
++                        ${(m.total_spent_cents / 100).toFixed(2)}
++                      </td>
++                      <td className="py-3 font-mono text-[10px] text-bone/40">
++                        {new Date(m.created_at).toLocaleDateString()}
++                      </td>
++                    </tr>
++                  ))}
++                </tbody>
++              </table>
++            </div>
++          )}
++        </div>
++      )}
++
++      {tab === "plans" && (
++        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
++          {data.plans.map((plan) => (
++            <div key={plan.id} className={`border bg-charcoal p-6 ${plan.is_active ? "border-gold/30" : "border-white/10 opacity-60"}`}>
++              <div className="flex items-start justify-between">
++                <div>
++                  <h3 className="font-display text-lg text-bone">{plan.name}</h3>
++                  <p className="mt-1 font-mono text-[10px] uppercase text-bone/40">{plan.interval}</p>
++                </div>
++                <p className="font-display text-2xl text-gold">${(plan.price_cents / 100).toFixed(2)}</p>
++              </div>
++              {plan.description && (
++                <p className="mt-3 text-sm text-bone/50">{plan.description}</p>
++              )}
++              {Array.isArray(plan.features) && plan.features.length > 0 && (
++                <ul className="mt-4 space-y-1">
++                  {plan.features.map((f, i) => (
++                    <li key={i} className="flex items-start gap-2 text-sm text-bone/60">
++                      <span className="mt-0.5 text-gold">✓</span> {f}
++                    </li>
++                  ))}
++                </ul>
++              )}
++              <div className="mt-4 flex items-center justify-between">
++                <span className={`font-mono text-[10px] uppercase ${plan.is_active ? "text-emerald-400" : "text-bone/30"}`}>
++                  {plan.is_active ? "Active" : "Inactive"}
++                </span>
++              </div>
++            </div>
++          ))}
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/app/admin/(protected)/page.tsx b/app/admin/(protected)/page.tsx
+index 16fdc24..9734e1e 100644
+--- a/app/admin/(protected)/page.tsx
++++ b/app/admin/(protected)/page.tsx
+@@ -1,10 +1,14 @@
++import Link from "next/link";
+ import { createClient } from "@/lib/supabase/server";
+ import { LiveVisitorsCard } from "@/components/admin/LiveVisitorsCard";
+ 
+ export default async function AdminDashboard() {
+   const supabase = createClient();
+ 
++  const now = new Date();
++  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
++  const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+   const abandonedCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+ 
+   const [
+@@ -12,74 +16,111 @@ export default async function AdminDashboard() {
+     { count: orderCount },
+     { data: paidOrders },
+     { data: weekOrders },
++    { data: monthOrders },
+     { count: pendingCount },
+     { count: customerCount },
+     { count: abandonedCount },
++    { count: todayViews },
++    { count: weekViews },
++    { count: monthViews },
++    { count: memberCount },
++    { count: activeMemberCount },
+   ] = await Promise.all([
+     supabase.from("products").select("*", { count: "exact", head: true }),
+     supabase.from("orders").select("*", { count: "exact", head: true }),
+     supabase.from("orders").select("total_cents").eq("status", "paid"),
+-    supabase
+-      .from("orders")
+-      .select("total_cents")
+-      .eq("status", "paid")
+-      .gte("created_at", weekAgo),
+-    supabase
+-      .from("orders")
+-      .select("*", { count: "exact", head: true })
+-      .eq("status", "pending"),
++    supabase.from("orders").select("total_cents").eq("status", "paid").gte("created_at", weekAgo),
++    supabase.from("orders").select("total_cents").eq("status", "paid").gte("created_at", monthAgo),
++    supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "pending"),
+     supabase.from("legacy_customers").select("*", { count: "exact", head: true }),
+-    supabase
+-      .from("orders")
+-      .select("*", { count: "exact", head: true })
+-      .eq("status", "pending")
+-      .lt("created_at", abandonedCutoff),
++    supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "pending").lt("created_at", abandonedCutoff),
++    supabase.from("page_views").select("*", { count: "exact", head: true }).gte("created_at", todayStart),
++    supabase.from("page_views").select("*", { count: "exact", head: true }).gte("created_at", weekAgo),
++    supabase.from("page_views").select("*", { count: "exact", head: true }).gte("created_at", monthAgo),
++    supabase.from("member_profiles").select("*", { count: "exact", head: true }),
++    supabase.from("member_profiles").select("*", { count: "exact", head: true }).eq("membership_status", "active"),
+   ]);
+ 
+-  const totalRevenueCents = (paidOrders ?? []).reduce(
+-    (sum, o) => sum + (o.total_cents ?? 0),
+-    0
+-  );
+-  const weekRevenueCents = (weekOrders ?? []).reduce(
+-    (sum, o) => sum + (o.total_cents ?? 0),
+-    0
+-  );
+-
+-  const stats = [
+-    { label: "Products", value: productCount ?? 0 },
+-    { label: "Orders", value: orderCount ?? 0 },
+-    { label: "Pending Orders", value: pendingCount ?? 0 },
+-    { label: "Abandoned Checkouts", value: abandonedCount ?? 0 },
+-    { label: "Customers", value: customerCount ?? 0 },
+-    {
+-      label: "Revenue (all time)",
+-      value: `$${(totalRevenueCents / 100).toFixed(2)}`,
+-    },
+-    {
+-      label: "Revenue (last 7d)",
+-      value: `$${(weekRevenueCents / 100).toFixed(2)}`,
+-    },
+-  ];
++  const totalRevenueCents = (paidOrders ?? []).reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
++  const weekRevenueCents = (weekOrders ?? []).reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
++  const monthRevenueCents = (monthOrders ?? []).reduce((sum, o) => sum + (o.total_cents ?? 0), 0);
+ 
+   return (
+     <div>
+       <p className="eyebrow mb-2">Overview</p>
+       <h1 className="font-display text-3xl text-bone">Dashboard</h1>
+ 
+-      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3">
++      {/* Revenue + Traffic Row */}
++      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Revenue (All Time)</p>
++          <p className="mt-2 font-display text-3xl text-gold">${(totalRevenueCents / 100).toFixed(2)}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Revenue (30d)</p>
++          <p className="mt-2 font-display text-3xl text-gold">${(monthRevenueCents / 100).toFixed(2)}</p>
++          <p className="mt-1 font-mono text-[10px] text-bone/30">7d: ${(weekRevenueCents / 100).toFixed(2)}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Orders</p>
++          <p className="mt-2 font-display text-3xl text-gold">{orderCount ?? 0}</p>
++          <p className="mt-1 font-mono text-[10px] text-bone/30">{pendingCount ?? 0} pending</p>
++        </div>
+         <LiveVisitorsCard />
+-        {stats.map((stat) => (
+-          <div
+-            key={stat.label}
+-            className="border border-white/10 bg-charcoal p-6"
++      </div>
++
++      {/* Traffic + Members Row */}
++      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Views Today</p>
++          <p className="mt-2 font-display text-3xl text-gold">{(todayViews ?? 0).toLocaleString()}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Views (7d)</p>
++          <p className="mt-2 font-display text-3xl text-gold">{(weekViews ?? 0).toLocaleString()}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Views (30d)</p>
++          <p className="mt-2 font-display text-3xl text-gold">{(monthViews ?? 0).toLocaleString()}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Members</p>
++          <p className="mt-2 font-display text-3xl text-gold">{activeMemberCount ?? 0}</p>
++          <p className="mt-1 font-mono text-[10px] text-bone/30">{memberCount ?? 0} total profiles</p>
++        </div>
++      </div>
++
++      {/* Quick stats row */}
++      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Products</p>
++          <p className="mt-2 font-display text-3xl text-gold">{productCount ?? 0}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Customers</p>
++          <p className="mt-2 font-display text-3xl text-gold">{customerCount ?? 0}</p>
++        </div>
++        <div className="border border-white/10 bg-charcoal p-6">
++          <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Abandoned Checkouts</p>
++          <p className="mt-2 font-display text-3xl text-gold">{abandonedCount ?? 0}</p>
++        </div>
++      </div>
++
++      {/* Quick links */}
++      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
++        {[
++          { label: "View Analytics", href: "/admin/analytics" },
++          { label: "Manage Products", href: "/admin/products" },
++          { label: "View Orders", href: "/admin/orders" },
++          { label: "Manage Members", href: "/admin/memberships" },
++        ].map((link) => (
++          <Link
++            key={link.href}
++            href={link.href}
++            className="border border-white/10 bg-charcoal p-4 text-center font-mono text-[11px] uppercase tracking-eyebrow text-bone/60 transition-colors hover:border-gold/40 hover:text-gold"
+           >
+-            <p className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
+-              {stat.label}
+-            </p>
+-            <p className="mt-2 font-display text-3xl text-gold">
+-              {stat.value}
+-            </p>
+-          </div>
++            {link.label}
++          </Link>
+         ))}
+       </div>
+     </div>
+diff --git a/app/api/admin/analytics/route.ts b/app/api/admin/analytics/route.ts
+new file mode 100644
+index 0000000..927576b
+--- /dev/null
++++ b/app/api/admin/analytics/route.ts
+@@ -0,0 +1,115 @@
++import { NextRequest, NextResponse } from "next/server";
++import { createClient } from "@/lib/supabase/server";
++import { isCurrentUserAdmin } from "@/lib/auth";
++
++export async function GET(req: NextRequest) {
++  const isAdmin = await isCurrentUserAdmin();
++  if (!isAdmin) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const range = req.nextUrl.searchParams.get("range") || "7d";
++
++  let daysBack = 7;
++  if (range === "24h") daysBack = 1;
++  else if (range === "7d") daysBack = 7;
++  else if (range === "30d") daysBack = 30;
++  else if (range === "90d") daysBack = 90;
++
++  const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
++
++  const supabase = createClient();
++
++  // Get all page views in range
++  const { data: views } = await supabase
++    .from("page_views")
++    .select("path, country, city, device_type, browser, os, created_at, session_id")
++    .gte("created_at", since)
++    .order("created_at", { ascending: true });
++
++  const allViews = views || [];
++
++  // Calculate stats
++  const totalViews = allViews.length;
++  const uniqueSessions = new Set(allViews.map((v) => v.session_id)).size;
++
++  // Views by day
++  const byDay: Record<string, number> = {};
++  const sessionsByDay: Record<string, Set<string>> = {};
++  for (const v of allViews) {
++    const day = v.created_at.split("T")[0];
++    byDay[day] = (byDay[day] || 0) + 1;
++    if (!sessionsByDay[day]) sessionsByDay[day] = new Set();
++    sessionsByDay[day].add(v.session_id);
++  }
++
++  const dailyViews = Object.entries(byDay)
++    .map(([date, views]) => ({
++      date,
++      views,
++      visitors: sessionsByDay[date]?.size || 0,
++    }))
++    .sort((a, b) => a.date.localeCompare(b.date));
++
++  // Views by hour (0-23)
++  const byHour: Record<number, number> = {};
++  for (let i = 0; i < 24; i++) byHour[i] = 0;
++  for (const v of allViews) {
++    const hour = new Date(v.created_at).getHours();
++    byHour[hour]++;
++  }
++  const hourlyViews = Object.entries(byHour).map(([hour, count]) => ({
++    hour: parseInt(hour),
++    count,
++  }));
++
++  // Top countries
++  const byCountry: Record<string, number> = {};
++  for (const v of allViews) {
++    const c = v.country || "Unknown";
++    byCountry[c] = (byCountry[c] || 0) + 1;
++  }
++  const topCountries = Object.entries(byCountry)
++    .map(([country, count]) => ({ country, count }))
++    .sort((a, b) => b.count - a.count)
++    .slice(0, 15);
++
++  // Top pages
++  const byPage: Record<string, number> = {};
++  for (const v of allViews) {
++    byPage[v.path] = (byPage[v.path] || 0) + 1;
++  }
++  const topPages = Object.entries(byPage)
++    .map(([path, count]) => ({ path, count }))
++    .sort((a, b) => b.count - a.count)
++    .slice(0, 10);
++
++  // Device breakdown
++  const byDevice: Record<string, number> = {};
++  for (const v of allViews) {
++    const d = v.device_type || "desktop";
++    byDevice[d] = (byDevice[d] || 0) + 1;
++  }
++  const devices = Object.entries(byDevice).map(([type, count]) => ({ type, count }));
++
++  // Browser breakdown
++  const byBrowser: Record<string, number> = {};
++  for (const v of allViews) {
++    const b = v.browser || "Unknown";
++    byBrowser[b] = (byBrowser[b] || 0) + 1;
++  }
++  const browsers = Object.entries(byBrowser)
++    .map(([name, count]) => ({ name, count }))
++    .sort((a, b) => b.count - a.count);
++
++  return NextResponse.json({
++    totalViews,
++    uniqueSessions,
++    dailyViews,
++    hourlyViews,
++    topCountries,
++    topPages,
++    devices,
++    browsers,
++  });
++}
+diff --git a/app/api/admin/memberships/route.ts b/app/api/admin/memberships/route.ts
+new file mode 100644
+index 0000000..b9064f3
+--- /dev/null
++++ b/app/api/admin/memberships/route.ts
+@@ -0,0 +1,87 @@
++import { NextResponse } from "next/server";
++import { createAdminClient } from "@/lib/supabase/admin";
++import { isCurrentUserAdmin } from "@/lib/auth";
++
++export async function GET() {
++  const isAdmin = await isCurrentUserAdmin();
++  if (!isAdmin) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const admin = createAdminClient();
++
++  // Fetch plans
++  const { data: plans } = await admin
++    .from("membership_plans")
++    .select("*")
++    .order("sort_order", { ascending: true });
++
++  // Fetch all member profiles with their auth email and library count
++  const { data: profiles } = await admin
++    .from("member_profiles")
++    .select("*, membership_plans(name, interval)")
++    .order("created_at", { ascending: false });
++
++  // Get auth users to map emails
++  const memberIds = (profiles || []).map((p) => p.id);
++  let emailMap: Record<string, string> = {};
++  if (memberIds.length > 0) {
++    // Fetch users in batches from auth
++    const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 });
++    for (const u of users) {
++      emailMap[u.id] = u.email || "";
++    }
++  }
++
++  // Get library counts per member
++  const { data: libraryCounts } = await admin
++    .from("member_library")
++    .select("member_id");
++
++  const libraryCountMap: Record<string, number> = {};
++  for (const row of libraryCounts || []) {
++    libraryCountMap[row.member_id] = (libraryCountMap[row.member_id] || 0) + 1;
++  }
++
++  const members = (profiles || []).map((p) => ({
++    id: p.id,
++    email: emailMap[p.id] || "unknown",
++    display_name: p.display_name,
++    membership_status: p.membership_status || "inactive",
++    plan_name: (p.membership_plans as any)?.name || null,
++    plan_interval: (p.membership_plans as any)?.interval || null,
++    membership_started_at: p.membership_started_at,
++    membership_expires_at: p.membership_expires_at,
++    total_spent_cents: p.total_spent_cents || 0,
++    library_count: libraryCountMap[p.id] || 0,
++    created_at: p.created_at,
++  }));
++
++  // Calculate stats
++  const activeMembers = members.filter((m) => m.membership_status === "active");
++  const activePlans = plans || [];
++
++  // Estimate monthly revenue from active members
++  let monthlyRevenue = 0;
++  for (const m of activeMembers) {
++    const plan = activePlans.find((p) => p.name === m.plan_name);
++    if (plan) {
++      if (plan.interval === "monthly") monthlyRevenue += plan.price_cents;
++      else if (plan.interval === "yearly") monthlyRevenue += Math.round(plan.price_cents / 12);
++      // lifetime is one-time, not recurring
++    }
++  }
++
++  const lifetimeMembers = activeMembers.filter((m) => m.plan_interval === "lifetime").length;
++
++  return NextResponse.json({
++    plans: plans || [],
++    members,
++    stats: {
++      totalMembers: members.length,
++      activeMembers: activeMembers.length,
++      monthlyRevenue,
++      lifetimeMembers,
++    },
++  });
++}
+diff --git a/app/api/analytics/track/route.ts b/app/api/analytics/track/route.ts
+new file mode 100644
+index 0000000..7ad7609
+--- /dev/null
++++ b/app/api/analytics/track/route.ts
+@@ -0,0 +1,68 @@
++import { NextRequest, NextResponse } from "next/server";
++import { createAdminClient } from "@/lib/supabase/admin";
++
++// Lightweight geo lookup from Vercel headers (free, no API needed)
++function getGeoFromHeaders(req: NextRequest) {
++  return {
++    country: req.headers.get("x-vercel-ip-country") || null,
++    city: req.headers.get("x-vercel-ip-city") || null,
++  };
++}
++
++function parseUserAgent(ua: string | null) {
++  if (!ua) return { browser: null, os: null, device_type: "desktop" };
++
++  const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua);
++  const isTablet = /iPad|Tablet/i.test(ua);
++  const device_type = isTablet ? "tablet" : isMobile ? "mobile" : "desktop";
++
++  let browser = "Other";
++  if (/Edg\//i.test(ua)) browser = "Edge";
++  else if (/Chrome/i.test(ua)) browser = "Chrome";
++  else if (/Firefox/i.test(ua)) browser = "Firefox";
++  else if (/Safari/i.test(ua)) browser = "Safari";
++
++  let os = "Other";
++  if (/Windows/i.test(ua)) os = "Windows";
++  else if (/Mac OS/i.test(ua)) os = "macOS";
++  else if (/Android/i.test(ua)) os = "Android";
++  else if (/iPhone|iPad/i.test(ua)) os = "iOS";
++  else if (/Linux/i.test(ua)) os = "Linux";
++
++  return { browser, os, device_type };
++}
++
++export async function POST(req: NextRequest) {
++  try {
++    const body = await req.json();
++    const { session_id, path, referrer, screen_width, utm_source, utm_medium, utm_campaign } = body;
++
++    if (!session_id || !path) {
++      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
++    }
++
++    const geo = getGeoFromHeaders(req);
++    const ua = req.headers.get("user-agent");
++    const parsed = parseUserAgent(ua);
++
++    const supabase = createAdminClient();
++    await supabase.from("page_views").insert({
++      session_id,
++      path,
++      referrer: referrer || null,
++      country: geo.country,
++      city: geo.city,
++      device_type: parsed.device_type,
++      browser: parsed.browser,
++      os: parsed.os,
++      screen_width: screen_width || null,
++      utm_source: utm_source || null,
++      utm_medium: utm_medium || null,
++      utm_campaign: utm_campaign || null,
++    });
++
++    return NextResponse.json({ ok: true });
++  } catch {
++    return NextResponse.json({ ok: true }); // fail silently for tracking
++  }
++}
+diff --git a/app/api/members/library/route.ts b/app/api/members/library/route.ts
+new file mode 100644
+index 0000000..6275e2c
+--- /dev/null
++++ b/app/api/members/library/route.ts
+@@ -0,0 +1,86 @@
++import { NextResponse } from "next/server";
++import { getCurrentUser } from "@/lib/auth";
++import { createClient } from "@/lib/supabase/server";
++import { getSignedCoverUrl } from "@/lib/r2/storage";
++
++export async function GET() {
++  const user = await getCurrentUser();
++  if (!user) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const supabase = createClient();
++
++  // Get member's library items with product details
++  const { data: libraryItems } = await supabase
++    .from("member_library")
++    .select(`
++      id,
++      product_id,
++      access_type,
++      products (
++        id,
++        title,
++        cover_image_key
++      )
++    `)
++    .eq("member_id", user.id)
++    .order("granted_at", { ascending: false });
++
++  if (!libraryItems || libraryItems.length === 0) {
++    return NextResponse.json({ items: [] });
++  }
++
++  // Get product files for each product
++  const productIds = [...new Set(libraryItems.map((li) => li.product_id))];
++  const { data: productFiles } = await supabase
++    .from("product_files")
++    .select("id, product_id, file_name, r2_key, file_type")
++    .in("product_id", productIds)
++    .order("created_at", { ascending: true });
++
++  // Get playback progress for this member
++  const { data: progressRows } = await supabase
++    .from("playback_progress")
++    .select("product_id, product_file_id, position_seconds, duration_seconds, completed")
++    .eq("member_id", user.id);
++
++  // Build response with signed cover URLs
++  const items = await Promise.all(
++    libraryItems.map(async (li) => {
++      const product = li.products as any;
++      if (!product) return null;
++
++      const coverUrl = await getSignedCoverUrl(product.cover_image_key);
++      const files = (productFiles || [])
++        .filter((f) => f.product_id === li.product_id)
++        .map((f) => ({
++          id: f.id,
++          file_name: f.file_name,
++          r2_key: f.r2_key,
++          file_type: f.file_type,
++        }));
++
++      const progress = (progressRows || [])
++        .filter((p) => p.product_id === li.product_id)
++        .map((p) => ({
++          file_id: p.product_file_id,
++          position: Number(p.position_seconds),
++          duration: Number(p.duration_seconds),
++          completed: p.completed,
++        }));
++
++      return {
++        id: li.id,
++        product_id: li.product_id,
++        title: product.title,
++        cover_url: coverUrl,
++        access_type: li.access_type,
++        files,
++        progress,
++      };
++    })
++  );
++
++  return NextResponse.json({ items: items.filter(Boolean) });
++}
+diff --git a/app/api/members/progress/route.ts b/app/api/members/progress/route.ts
+new file mode 100644
+index 0000000..1ad986c
+--- /dev/null
++++ b/app/api/members/progress/route.ts
+@@ -0,0 +1,41 @@
++import { NextRequest, NextResponse } from "next/server";
++import { getCurrentUser } from "@/lib/auth";
++import { createClient } from "@/lib/supabase/server";
++
++export async function POST(req: NextRequest) {
++  const user = await getCurrentUser();
++  if (!user) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const body = await req.json();
++  const { productId, fileId, position, duration, completed } = body;
++
++  if (!productId || !fileId) {
++    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
++  }
++
++  const supabase = createClient();
++
++  // Upsert progress — the table has a unique constraint on (member_id, product_id, product_file_id)
++  const { error } = await supabase
++    .from("playback_progress")
++    .upsert(
++      {
++        member_id: user.id,
++        product_id: productId,
++        product_file_id: fileId,
++        position_seconds: position || 0,
++        duration_seconds: duration || 0,
++        completed: completed || false,
++        last_played_at: new Date().toISOString(),
++      },
++      { onConflict: "member_id,product_id,product_file_id" }
++    );
++
++  if (error) {
++    return NextResponse.json({ error: error.message }, { status: 500 });
++  }
++
++  return NextResponse.json({ ok: true });
++}
+diff --git a/app/api/members/stream/route.ts b/app/api/members/stream/route.ts
+new file mode 100644
+index 0000000..13f4f19
+--- /dev/null
++++ b/app/api/members/stream/route.ts
+@@ -0,0 +1,46 @@
++import { NextRequest, NextResponse } from "next/server";
++import { getCurrentUser } from "@/lib/auth";
++import { createClient } from "@/lib/supabase/server";
++import { getSignedDownloadUrl } from "@/lib/r2/storage";
++
++export async function GET(req: NextRequest) {
++  const user = await getCurrentUser();
++  if (!user) {
++    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
++  }
++
++  const fileId = req.nextUrl.searchParams.get("fileId");
++  if (!fileId) {
++    return NextResponse.json({ error: "Missing fileId" }, { status: 400 });
++  }
++
++  const supabase = createClient();
++
++  // Get the file and verify the user has access
++  const { data: file } = await supabase
++    .from("product_files")
++    .select("id, r2_key, product_id, file_name")
++    .eq("id", fileId)
++    .maybeSingle();
++
++  if (!file) {
++    return NextResponse.json({ error: "File not found" }, { status: 404 });
++  }
++
++  // Check that the user has this product in their library
++  const { data: access } = await supabase
++    .from("member_library")
++    .select("id")
++    .eq("member_id", user.id)
++    .eq("product_id", file.product_id)
++    .maybeSingle();
++
++  if (!access) {
++    return NextResponse.json({ error: "Access denied" }, { status: 403 });
++  }
++
++  // Generate a signed streaming URL (15 min TTL for streaming)
++  const url = await getSignedDownloadUrl(file.r2_key);
++
++  return NextResponse.json({ url, fileName: file.file_name });
++}
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 0eef94e..55adc91 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,7 +1,9 @@
+ import type { Metadata } from "next";
+ import { Fraunces, Inter, IBM_Plex_Mono, Anton } from "next/font/google";
++import { Suspense } from "react";
+ import { CartProvider } from "@/lib/cart-context";
+ import { VisitorHeartbeat } from "@/components/VisitorHeartbeat";
++import { AnalyticsTracker } from "@/components/AnalyticsTracker";
+ import "./globals.css";
+ 
+ const fraunces = Fraunces({
+@@ -62,6 +64,7 @@ export default function RootLayout({
+     <html lang="en" className={`${fraunces.variable} ${anton.variable} ${inter.variable} ${plexMono.variable}`}>
+       <body>
+         <VisitorHeartbeat />
++        <Suspense fallback={null}><AnalyticsTracker /></Suspense>
+         <CartProvider>{children}</CartProvider>
+       </body>
+     </html>
+diff --git a/app/members/(protected)/account/page.tsx b/app/members/(protected)/account/page.tsx
+new file mode 100644
+index 0000000..35d369c
+--- /dev/null
++++ b/app/members/(protected)/account/page.tsx
+@@ -0,0 +1,106 @@
++import { redirect } from "next/navigation";
++import { getCurrentUser } from "@/lib/auth";
++import { createClient } from "@/lib/supabase/server";
++import Link from "next/link";
++
++export default async function MemberAccountPage() {
++  const user = await getCurrentUser();
++  if (!user) redirect("/members/login");
++
++  const supabase = createClient();
++
++  const { data: profile } = await supabase
++    .from("member_profiles")
++    .select("*, membership_plans(name, interval, price_cents)")
++    .eq("id", user.id)
++    .maybeSingle();
++
++  const { count: libraryCount } = await supabase
++    .from("member_library")
++    .select("*", { count: "exact", head: true })
++    .eq("member_id", user.id);
++
++  const plan = profile?.membership_plans as any;
++
++  return (
++    <div>
++      <p className="eyebrow mb-2">Settings</p>
++      <h1 className="font-display text-3xl text-bone">My Account</h1>
++
++      <div className="mt-8 grid gap-6 sm:grid-cols-2">
++        {/* Profile card */}
++        <div className="border border-white/10 bg-charcoal p-6">
++          <h2 className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Profile</h2>
++          <div className="mt-4 space-y-3">
++            <div>
++              <p className="font-mono text-[10px] uppercase text-bone/30">Email</p>
++              <p className="mt-0.5 text-sm text-bone">{user.email}</p>
++            </div>
++            <div>
++              <p className="font-mono text-[10px] uppercase text-bone/30">Display Name</p>
++              <p className="mt-0.5 text-sm text-bone">{profile?.display_name || "—"}</p>
++            </div>
++            <div>
++              <p className="font-mono text-[10px] uppercase text-bone/30">Member Since</p>
++              <p className="mt-0.5 text-sm text-bone">
++                {profile ? new Date(profile.created_at).toLocaleDateString() : "—"}
++              </p>
++            </div>
++          </div>
++        </div>
++
++        {/* Membership card */}
++        <div className="border border-white/10 bg-charcoal p-6">
++          <h2 className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Membership</h2>
++          <div className="mt-4 space-y-3">
++            <div>
++              <p className="font-mono text-[10px] uppercase text-bone/30">Status</p>
++              <span className={`mt-1 inline-block rounded px-2 py-0.5 font-mono text-[10px] uppercase ${
++                profile?.membership_status === "active"
++                  ? "bg-emerald-500/20 text-emerald-400"
++                  : "bg-white/5 text-bone/40"
++              }`}>
++                {profile?.membership_status || "inactive"}
++              </span>
++            </div>
++            {plan && (
++              <div>
++                <p className="font-mono text-[10px] uppercase text-bone/30">Plan</p>
++                <p className="mt-0.5 text-sm text-bone">
++                  {plan.name} — ${(plan.price_cents / 100).toFixed(2)}/{plan.interval}
++                </p>
++              </div>
++            )}
++            {profile?.membership_expires_at && (
++              <div>
++                <p className="font-mono text-[10px] uppercase text-bone/30">
++                  {profile.membership_status === "active" ? "Renews" : "Expired"}
++                </p>
++                <p className="mt-0.5 text-sm text-bone">
++                  {new Date(profile.membership_expires_at).toLocaleDateString()}
++                </p>
++              </div>
++            )}
++          </div>
++        </div>
++
++        {/* Library stats */}
++        <div className="border border-white/10 bg-charcoal p-6 sm:col-span-2">
++          <h2 className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">Library</h2>
++          <div className="mt-4 flex items-center justify-between">
++            <div>
++              <p className="font-display text-2xl text-gold">{libraryCount ?? 0}</p>
++              <p className="mt-1 font-mono text-[10px] uppercase text-bone/30">Items in library</p>
++            </div>
++            <Link
++              href="/members/library"
++              className="border border-gold px-4 py-2 font-mono text-[11px] uppercase tracking-eyebrow text-gold transition-colors hover:bg-gold hover:text-void"
++            >
++              Go to Library
++            </Link>
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/app/members/(protected)/layout.tsx b/app/members/(protected)/layout.tsx
+new file mode 100644
+index 0000000..cb5640b
+--- /dev/null
++++ b/app/members/(protected)/layout.tsx
+@@ -0,0 +1,54 @@
++import { redirect } from "next/navigation";
++import Link from "next/link";
++import { getCurrentUser } from "@/lib/auth";
++import { memberLogoutAction } from "@/lib/actions/member-auth";
++import { SealMark } from "@/components/SealMark";
++
++export default async function MemberLayout({
++  children,
++}: {
++  children: React.ReactNode;
++}) {
++  const user = await getCurrentUser();
++  if (!user) redirect("/members/login");
++
++  return (
++    <div className="min-h-screen bg-void text-bone">
++      {/* Top nav bar */}
++      <header className="sticky top-0 z-50 border-b border-white/10 bg-void/90 backdrop-blur-sm">
++        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
++          <Link href="/members/library" className="flex items-center gap-2">
++            <SealMark className="h-6 w-6 text-gold" />
++            <span className="font-display text-sm tracking-wide">MY LIBRARY</span>
++          </Link>
++          <nav className="flex items-center gap-6">
++            <Link
++              href="/members/library"
++              className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/60 transition-colors hover:text-gold"
++            >
++              Library
++            </Link>
++            <Link
++              href="/members/account"
++              className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/60 transition-colors hover:text-gold"
++            >
++              Account
++            </Link>
++            <Link
++              href="/"
++              className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/60 transition-colors hover:text-gold"
++            >
++              Store
++            </Link>
++            <form action={memberLogoutAction}>
++              <button className="font-mono text-[11px] uppercase tracking-eyebrow text-bone/40 hover:text-gold">
++                Sign Out
++              </button>
++            </form>
++          </nav>
++        </div>
++      </header>
++      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
++    </div>
++  );
++}
+diff --git a/app/members/(protected)/library/page.tsx b/app/members/(protected)/library/page.tsx
+new file mode 100644
+index 0000000..a8a58e0
+--- /dev/null
++++ b/app/members/(protected)/library/page.tsx
+@@ -0,0 +1,321 @@
++"use client";
++
++import { useEffect, useState, useRef, useCallback } from "react";
++import Image from "next/image";
++
++interface LibraryFile {
++  id: string;
++  file_name: string;
++  r2_key: string;
++  file_type: string;
++}
++
++interface LibraryItem {
++  id: string;
++  product_id: string;
++  title: string;
++  cover_url: string | null;
++  access_type: string;
++  files: LibraryFile[];
++  progress?: {
++    file_id: string;
++    position: number;
++    duration: number;
++    completed: boolean;
++  }[];
++}
++
++export default function MemberLibraryPage() {
++  const [items, setItems] = useState<LibraryItem[]>([]);
++  const [loading, setLoading] = useState(true);
++  const [activeTrack, setActiveTrack] = useState<{
++    item: LibraryItem;
++    file: LibraryFile;
++    streamUrl: string;
++  } | null>(null);
++
++  // Audio player state
++  const audioRef = useRef<HTMLAudioElement>(null);
++  const [isPlaying, setIsPlaying] = useState(false);
++  const [currentTime, setCurrentTime] = useState(0);
++  const [duration, setDuration] = useState(0);
++  const progressTimer = useRef<ReturnType<typeof setInterval>>();
++
++  useEffect(() => {
++    fetch("/api/members/library")
++      .then((r) => r.json())
++      .then((d) => { setItems(d.items || []); setLoading(false); })
++      .catch(() => setLoading(false));
++  }, []);
++
++  const playTrack = useCallback(async (item: LibraryItem, file: LibraryFile) => {
++    // Get signed stream URL
++    const res = await fetch(`/api/members/stream?fileId=${file.id}`);
++    const data = await res.json();
++    if (!data.url) return;
++
++    setActiveTrack({ item, file, streamUrl: data.url });
++    setIsPlaying(true);
++    setCurrentTime(0);
++
++    // Check for saved progress
++    const saved = item.progress?.find((p) => p.file_id === file.id);
++    if (saved && saved.position > 0 && !saved.completed) {
++      setTimeout(() => {
++        if (audioRef.current) {
++          audioRef.current.currentTime = saved.position;
++        }
++      }, 300);
++    }
++  }, []);
++
++  // Save progress periodically
++  const saveProgress = useCallback(() => {
++    if (!activeTrack || !audioRef.current) return;
++    const audio = audioRef.current;
++    if (audio.duration && audio.currentTime > 0) {
++      fetch("/api/members/progress", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          productId: activeTrack.item.product_id,
++          fileId: activeTrack.file.id,
++          position: Math.floor(audio.currentTime),
++          duration: Math.floor(audio.duration),
++          completed: audio.currentTime >= audio.duration - 1,
++        }),
++      }).catch(() => {});
++    }
++  }, [activeTrack]);
++
++  useEffect(() => {
++    progressTimer.current = setInterval(saveProgress, 15000);
++    return () => {
++      if (progressTimer.current) clearInterval(progressTimer.current);
++      saveProgress();
++    };
++  }, [saveProgress]);
++
++  const togglePlay = () => {
++    if (!audioRef.current) return;
++    if (isPlaying) {
++      audioRef.current.pause();
++      saveProgress();
++    } else {
++      audioRef.current.play();
++    }
++    setIsPlaying(!isPlaying);
++  };
++
++  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const val = parseFloat(e.target.value);
++    if (audioRef.current) {
++      audioRef.current.currentTime = val;
++      setCurrentTime(val);
++    }
++  };
++
++  const formatTime = (s: number) => {
++    const m = Math.floor(s / 60);
++    const sec = Math.floor(s % 60);
++    return `${m}:${sec.toString().padStart(2, "0")}`;
++  };
++
++  if (loading) {
++    return (
++      <div className="flex min-h-[50vh] items-center justify-center">
++        <p className="text-bone/30">Loading your library...</p>
++      </div>
++    );
++  }
++
++  return (
++    <div className="pb-32">
++      <p className="eyebrow mb-2">Your Collection</p>
++      <h1 className="font-display text-3xl text-bone">My Library</h1>
++
++      {items.length === 0 ? (
++        <div className="mt-16 flex flex-col items-center text-center">
++          <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-charcoal">
++            <svg className="h-8 w-8 text-bone/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
++            </svg>
++          </div>
++          <p className="mt-6 text-lg text-bone/50">Your library is empty</p>
++          <p className="mt-2 text-sm text-bone/30">
++            Purchase subliminals from the store to access them here.
++          </p>
++          <a
++            href="/"
++            className="mt-6 border border-gold px-6 py-2.5 font-mono text-[11px] uppercase tracking-eyebrow text-gold transition-colors hover:bg-gold hover:text-void"
++          >
++            Browse Store
++          </a>
++        </div>
++      ) : (
++        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
++          {items.map((item) => (
++            <div
++              key={item.id}
++              className="group border border-white/10 bg-charcoal transition-colors hover:border-gold/30"
++            >
++              {/* Cover */}
++              <div className="relative aspect-square overflow-hidden bg-panel">
++                {item.cover_url ? (
++                  <Image
++                    src={item.cover_url}
++                    alt={item.title}
++                    fill
++                    className="object-cover transition-transform group-hover:scale-105"
++                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
++                  />
++                ) : (
++                  <div className="flex h-full items-center justify-center">
++                    <svg className="h-12 w-12 text-bone/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
++                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
++                    </svg>
++                  </div>
++                )}
++                {/* Play overlay */}
++                {item.files.length > 0 && (
++                  <button
++                    onClick={() => playTrack(item, item.files[0])}
++                    className="absolute inset-0 flex items-center justify-center bg-void/40 opacity-0 transition-opacity group-hover:opacity-100"
++                  >
++                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold">
++                      <svg className="ml-1 h-6 w-6 text-void" fill="currentColor" viewBox="0 0 24 24">
++                        <path d="M8 5v14l11-7z" />
++                      </svg>
++                    </div>
++                  </button>
++                )}
++              </div>
++
++              {/* Info */}
++              <div className="p-4">
++                <h3 className="font-display text-sm text-bone">{item.title}</h3>
++                <p className="mt-1 font-mono text-[10px] uppercase text-bone/30">
++                  {item.files.length} {item.files.length === 1 ? "track" : "tracks"} · {item.access_type}
++                </p>
++
++                {/* Track list */}
++                {item.files.length > 1 && (
++                  <div className="mt-3 space-y-1">
++                    {item.files.map((f, i) => {
++                      const prog = item.progress?.find((p) => p.file_id === f.id);
++                      const isActive = activeTrack?.file.id === f.id;
++                      return (
++                        <button
++                          key={f.id}
++                          onClick={() => playTrack(item, f)}
++                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors ${
++                            isActive ? "bg-gold/10 text-gold" : "hover:bg-white/5 text-bone/50"
++                          }`}
++                        >
++                          <span className="w-4 font-mono text-[10px]">{i + 1}</span>
++                          <span className="flex-1 truncate text-[12px]">{f.file_name.replace(/\.[^.]+$/, "")}</span>
++                          {prog?.completed && (
++                            <span className="text-[10px] text-emerald-400">✓</span>
++                          )}
++                        </button>
++                      );
++                    })}
++                  </div>
++                )}
++              </div>
++            </div>
++          ))}
++        </div>
++      )}
++
++      {/* Fixed bottom audio player */}
++      {activeTrack && (
++        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-charcoal/95 backdrop-blur-md">
++          <audio
++            ref={audioRef}
++            src={activeTrack.streamUrl}
++            autoPlay
++            onTimeUpdate={() => {
++              if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
++            }}
++            onLoadedMetadata={() => {
++              if (audioRef.current) setDuration(audioRef.current.duration);
++            }}
++            onEnded={() => {
++              setIsPlaying(false);
++              saveProgress();
++            }}
++            onPlay={() => setIsPlaying(true)}
++            onPause={() => setIsPlaying(false)}
++          />
++          <div className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-3">
++            {/* Track info */}
++            <div className="flex min-w-0 items-center gap-3">
++              {activeTrack.item.cover_url && (
++                <Image
++                  src={activeTrack.item.cover_url}
++                  alt=""
++                  width={44}
++                  height={44}
++                  className="rounded"
++                />
++              )}
++              <div className="min-w-0">
++                <p className="truncate text-sm text-bone">
++                  {activeTrack.file.file_name.replace(/\.[^.]+$/, "")}
++                </p>
++                <p className="truncate font-mono text-[10px] text-bone/40">
++                  {activeTrack.item.title}
++                </p>
++              </div>
++            </div>
++
++            {/* Controls */}
++            <div className="flex flex-1 flex-col items-center gap-1">
++              <div className="flex items-center gap-4">
++                <button onClick={togglePlay} className="flex h-10 w-10 items-center justify-center rounded-full bg-gold text-void transition-transform hover:scale-105">
++                  {isPlaying ? (
++                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
++                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
++                    </svg>
++                  ) : (
++                    <svg className="ml-0.5 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
++                      <path d="M8 5v14l11-7z" />
++                    </svg>
++                  )}
++                </button>
++              </div>
++              <div className="flex w-full max-w-md items-center gap-2">
++                <span className="w-10 text-right font-mono text-[10px] text-bone/40">{formatTime(currentTime)}</span>
++                <input
++                  type="range"
++                  min={0}
++                  max={duration || 0}
++                  value={currentTime}
++                  onChange={seek}
++                  className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/10 accent-gold [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gold"
++                />
++                <span className="w-10 font-mono text-[10px] text-bone/40">{formatTime(duration)}</span>
++              </div>
++            </div>
++
++            {/* Close */}
++            <button
++              onClick={() => {
++                saveProgress();
++                setActiveTrack(null);
++                setIsPlaying(false);
++                if (audioRef.current) audioRef.current.pause();
++              }}
++              className="text-bone/30 hover:text-bone"
++            >
++              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
++                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
++              </svg>
++            </button>
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/app/members/login/page.tsx b/app/members/login/page.tsx
+new file mode 100644
+index 0000000..08fd628
+--- /dev/null
++++ b/app/members/login/page.tsx
+@@ -0,0 +1,73 @@
++"use client";
++
++import { useFormState } from "react-dom";
++import Link from "next/link";
++import { memberLoginAction, type MemberAuthState } from "@/lib/actions/member-auth";
++import { SealMark } from "@/components/SealMark";
++
++const initialState: MemberAuthState = {};
++
++export default function MemberLoginPage() {
++  const [state, formAction] = useFormState(memberLoginAction, initialState);
++
++  return (
++    <div className="flex min-h-screen items-center justify-center bg-void px-6">
++      <div className="w-full max-w-sm">
++        <div className="mb-8 flex flex-col items-center">
++          <SealMark className="h-10 w-10 text-gold" />
++          <p className="mt-4 font-display text-2xl text-bone">Member Login</p>
++          <p className="mt-1 text-sm text-bone/40">Access your audio library</p>
++        </div>
++
++        <form action={formAction} className="space-y-4">
++          <div>
++            <label className="mb-1 block font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Email
++            </label>
++            <input
++              type="email"
++              name="email"
++              required
++              className="w-full border border-white/15 bg-charcoal px-3 py-2.5 text-sm text-bone placeholder:text-bone/20 focus:border-gold focus:outline-none"
++              placeholder="you@example.com"
++            />
++          </div>
++          <div>
++            <label className="mb-1 block font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Password
++            </label>
++            <input
++              type="password"
++              name="password"
++              required
++              className="w-full border border-white/15 bg-charcoal px-3 py-2.5 text-sm text-bone placeholder:text-bone/20 focus:border-gold focus:outline-none"
++            />
++          </div>
++
++          {state.error && (
++            <p className="text-sm text-red-400">{state.error}</p>
++          )}
++
++          <button
++            type="submit"
++            className="w-full border border-gold bg-gold py-3 font-mono text-[11px] uppercase tracking-eyebrow text-void transition-colors hover:bg-transparent hover:text-gold"
++          >
++            Sign In
++          </button>
++        </form>
++
++        <p className="mt-6 text-center text-sm text-bone/40">
++          Don&apos;t have an account?{" "}
++          <Link href="/members/signup" className="text-gold hover:underline">
++            Sign up
++          </Link>
++        </p>
++        <p className="mt-2 text-center">
++          <Link href="/" className="text-sm text-bone/30 hover:text-bone/50">
++            ← Back to store
++          </Link>
++        </p>
++      </div>
++    </div>
++  );
++}
+diff --git a/app/members/page.tsx b/app/members/page.tsx
+new file mode 100644
+index 0000000..e5fddc9
+--- /dev/null
++++ b/app/members/page.tsx
+@@ -0,0 +1,5 @@
++import { redirect } from "next/navigation";
++
++export default function MembersPage() {
++  redirect("/members/library");
++}
+diff --git a/app/members/signup/page.tsx b/app/members/signup/page.tsx
+new file mode 100644
+index 0000000..bf96e84
+--- /dev/null
++++ b/app/members/signup/page.tsx
+@@ -0,0 +1,86 @@
++"use client";
++
++import { useFormState } from "react-dom";
++import Link from "next/link";
++import { memberSignupAction, type MemberAuthState } from "@/lib/actions/member-auth";
++import { SealMark } from "@/components/SealMark";
++
++const initialState: MemberAuthState = {};
++
++export default function MemberSignupPage() {
++  const [state, formAction] = useFormState(memberSignupAction, initialState);
++
++  return (
++    <div className="flex min-h-screen items-center justify-center bg-void px-6">
++      <div className="w-full max-w-sm">
++        <div className="mb-8 flex flex-col items-center">
++          <SealMark className="h-10 w-10 text-gold" />
++          <p className="mt-4 font-display text-2xl text-bone">Create Account</p>
++          <p className="mt-1 text-sm text-bone/40">Join Kaizen and access your library</p>
++        </div>
++
++        <form action={formAction} className="space-y-4">
++          <div>
++            <label className="mb-1 block font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Display Name
++            </label>
++            <input
++              type="text"
++              name="display_name"
++              className="w-full border border-white/15 bg-charcoal px-3 py-2.5 text-sm text-bone placeholder:text-bone/20 focus:border-gold focus:outline-none"
++              placeholder="Your name"
++            />
++          </div>
++          <div>
++            <label className="mb-1 block font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Email
++            </label>
++            <input
++              type="email"
++              name="email"
++              required
++              className="w-full border border-white/15 bg-charcoal px-3 py-2.5 text-sm text-bone placeholder:text-bone/20 focus:border-gold focus:outline-none"
++              placeholder="you@example.com"
++            />
++          </div>
++          <div>
++            <label className="mb-1 block font-mono text-[11px] uppercase tracking-eyebrow text-bone/50">
++              Password
++            </label>
++            <input
++              type="password"
++              name="password"
++              required
++              minLength={6}
++              className="w-full border border-white/15 bg-charcoal px-3 py-2.5 text-sm text-bone placeholder:text-bone/20 focus:border-gold focus:outline-none"
++              placeholder="Min. 6 characters"
++            />
++          </div>
++
++          {state.error && (
++            <p className="text-sm text-red-400">{state.error}</p>
++          )}
++
++          <button
++            type="submit"
++            className="w-full border border-gold bg-gold py-3 font-mono text-[11px] uppercase tracking-eyebrow text-void transition-colors hover:bg-transparent hover:text-gold"
++          >
++            Create Account
++          </button>
++        </form>
++
++        <p className="mt-6 text-center text-sm text-bone/40">
++          Already have an account?{" "}
++          <Link href="/members/login" className="text-gold hover:underline">
++            Sign in
++          </Link>
++        </p>
++        <p className="mt-2 text-center">
++          <Link href="/" className="text-sm text-bone/30 hover:text-bone/50">
++            ← Back to store
++          </Link>
++        </p>
++      </div>
++    </div>
++  );
++}
+diff --git a/components/AnalyticsTracker.tsx b/components/AnalyticsTracker.tsx
+new file mode 100644
+index 0000000..03a8f1e
+--- /dev/null
++++ b/components/AnalyticsTracker.tsx
+@@ -0,0 +1,48 @@
++"use client";
++
++import { useEffect, useRef } from "react";
++import { usePathname, useSearchParams } from "next/navigation";
++
++function getSessionId() {
++  const key = "kaizen_sid";
++  let sid = sessionStorage.getItem(key);
++  if (!sid) {
++    sid = crypto.randomUUID();
++    sessionStorage.setItem(key, sid);
++  }
++  return sid;
++}
++
++export function AnalyticsTracker() {
++  const pathname = usePathname();
++  const searchParams = useSearchParams();
++  const lastPath = useRef("");
++
++  useEffect(() => {
++    const fullPath = pathname + (searchParams.toString() ? `?${searchParams}` : "");
++    if (fullPath === lastPath.current) return;
++    lastPath.current = fullPath;
++
++    try {
++      const sid = getSessionId();
++      fetch("/api/analytics/track", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          session_id: sid,
++          path: pathname,
++          referrer: document.referrer || null,
++          screen_width: window.screen.width,
++          utm_source: searchParams.get("utm_source"),
++          utm_medium: searchParams.get("utm_medium"),
++          utm_campaign: searchParams.get("utm_campaign"),
++        }),
++        keepalive: true,
++      }).catch(() => {});
++    } catch {
++      // Analytics should never break the page
++    }
++  }, [pathname, searchParams]);
++
++  return null;
++}
+diff --git a/lib/actions/member-auth.ts b/lib/actions/member-auth.ts
+new file mode 100644
+index 0000000..046555c
+--- /dev/null
++++ b/lib/actions/member-auth.ts
+@@ -0,0 +1,67 @@
++"use server";
++
++import { redirect } from "next/navigation";
++import { createClient } from "@/lib/supabase/server";
++import { createAdminClient } from "@/lib/supabase/admin";
++
++export interface MemberAuthState {
++  error?: string;
++  success?: string;
++}
++
++export async function memberLoginAction(
++  _prevState: MemberAuthState,
++  formData: FormData
++): Promise<MemberAuthState> {
++  const email = String(formData.get("email") ?? "");
++  const password = String(formData.get("password") ?? "");
++
++  const supabase = createClient();
++  const { error } = await supabase.auth.signInWithPassword({ email, password });
++
++  if (error) return { error: error.message };
++
++  redirect("/members/library");
++}
++
++export async function memberSignupAction(
++  _prevState: MemberAuthState,
++  formData: FormData
++): Promise<MemberAuthState> {
++  const email = String(formData.get("email") ?? "");
++  const password = String(formData.get("password") ?? "");
++  const displayName = String(formData.get("display_name") ?? "");
++
++  if (password.length < 6) {
++    return { error: "Password must be at least 6 characters" };
++  }
++
++  const supabase = createClient();
++  const { data, error } = await supabase.auth.signUp({
++    email,
++    password,
++    options: {
++      data: { display_name: displayName },
++    },
++  });
++
++  if (error) return { error: error.message };
++
++  // Create member profile
++  if (data.user) {
++    const admin = createAdminClient();
++    await admin.from("member_profiles").upsert({
++      id: data.user.id,
++      display_name: displayName || null,
++      membership_status: "inactive",
++    });
++  }
++
++  redirect("/members/library");
++}
++
++export async function memberLogoutAction() {
++  const supabase = createClient();
++  await supabase.auth.signOut();
++  redirect("/members/login");
++}
+-- 
+2.43.0
+

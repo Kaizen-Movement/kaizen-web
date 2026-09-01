@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-void text-bone font-body antialiased;
+  }
+  ::selection {
+    @apply bg-gold/30 text-bone;
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.gold");
+    outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply font-mono text-[11px] uppercase tracking-eyebrow text-gold;
+  }
+  .rule {
+    @apply h-px w-full bg-white/10;
+  }
+
+  /* Frosted glass surface — sticky nav, dropdowns, cart drawer. Replaces
+     flat bg + hairline border with a translucent, beveled, lit surface. */
+  .glass-panel {
+    @apply border border-white/[0.08] bg-charcoal/70 shadow-glass backdrop-blur-xl;
+    background-image: theme("backgroundImage.glass-sheen");
+  }
+
+  /* The "medallion" card at rest — embossed, sitting on the page rather
+     than a flat bordered rectangle. Perspective is set here so child
+     elements (see .tilt-inner) can rotate in 3D space on hover. */
+  .depth-card {
+    @apply border border-white/10 bg-charcoal shadow-depth-sm transition-shadow duration-500;
+    transform-style: preserve-3d;
+  }
+  .depth-card:hover {
+    @apply border-crimson/40 shadow-depth-lg;
+  }
+
+  /* Tactile, raised gold button with a real press response. */
+  .btn-3d {
+    @apply border border-gold bg-gold text-void shadow-btn-3d transition-all duration-200;
+  }
+  .btn-3d:hover {
+    @apply -translate-y-0.5;
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+      inset 0 -2px 0 0 rgba(0, 0, 0, 0.22),
+      0 16px 30px -8px rgba(201, 162, 39, 0.55);
+  }
+  .btn-3d:active {
+    @apply translate-y-0 shadow-btn-3d-active;
+  }
+
+  /* Subtle material grain — breaks up flat dark fields so large sections
+     read as a surface, not a solid color swatch. Very low opacity by
+     design; this should be felt more than seen. */
+  .grain-overlay {
+    @apply pointer-events-none absolute inset-0 bg-grain opacity-[0.03];
+  }
+}
+
+@keyframes seal-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.seal-mark {
+  animation: seal-rotate 60s linear infinite;
+}
