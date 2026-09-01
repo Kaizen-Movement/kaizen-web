@@ -26,16 +26,35 @@
 
   <main id="app">
     <section class="hero route" data-route="home">
+      <div class="hero-noise" aria-hidden="true"></div>
       <div class="hero-copy reveal">
-        <div class="eyebrow">改善 · CONTINUOUS REFINEMENT</div>
-        <h1>Built for a<br><span>deliberate mind.</span></h1>
-        <p>Precision-engineered subliminal audio for attraction, self-development, capability and lifestyle. Focused systems. Private access. Deliberate refinement.</p>
-        <div class="hero-actions"><a class="btn primary" href="#explore">Explore audios <b>↗</b></a><a class="btn ghost" href="#attraction">Start with attraction</a></div>
+        <div class="eyebrow" id="heroEyebrow">改善 · CONTINUOUS REFINEMENT</div>
+        <h1><span class="hero-title-lead" id="heroTitleLead">Built for a</span><br><span id="heroTitleAccent">deliberate mind.</span></h1>
+        <p id="heroDescription">Precision-engineered subliminal audio for attraction, self-development, capability and lifestyle. Focused systems. Private access. Deliberate refinement.</p>
+        <div class="hero-actions"><a class="btn primary" href="#explore" id="heroPrimaryCta">Explore audios <b>↗</b></a><a class="btn ghost" href="#attraction" id="heroSecondaryCta">Start with attraction</a></div>
         <div class="trust-strip"><span>Instant digital access</span><i></i><span>Secure checkout</span><i></i><span>Private member access</span></div>
       </div>
       <div class="hero-visual" aria-hidden="true">
+        <div class="hero-glow"></div>
+        <div class="hero-montage">
+          <span class="montage-kanji">改善</span>
+          <span class="montage-label label-a">MIND / METHOD / MASTERY</span>
+          <span class="montage-label label-b">01 · REFINE</span>
+          <span class="montage-label label-c">BUILT WITH INTENTION</span>
+          <span class="montage-micro micro-a">ATTRACTION<br>CAPABILITY<br>LIFESTYLE</span>
+          <span class="montage-micro micro-b">REPEAT / EVOLVE / ASCEND</span>
+          <svg class="hero-doodles" viewBox="0 0 600 700">
+            <g class="doodle-grid"><path d="M64 72h160M64 96h120M64 120h78"/><path d="M82 52v92M108 52v92M134 52v92M160 52v92"/></g>
+            <g class="doodle-orbit"><circle cx="390" cy="238" r="126"/><circle cx="390" cy="238" r="86"/><path d="M246 238h288M390 94v288"/><path d="M286 326c62 54 155 49 210-12"/></g>
+            <g class="doodle-arrow"><path d="M84 482c72-68 146-82 226-49"/><path d="m283 410 31 24-37 15"/></g>
+            <g class="doodle-steps"><path d="M386 548h42v-42h42v-42h42"/><path d="m498 438 16 25-27 11"/></g>
+            <g class="doodle-cross"><circle cx="116" cy="596" r="28"/><path d="M116 550v92M70 596h92"/></g>
+          </svg>
+        </div>
         <svg class="hero-orbit" viewBox="0 0 500 500"><circle cx="250" cy="250" r="190"/><circle cx="250" cy="250" r="145"/><path d="M84 250h332M250 84v332"/></svg>
+        <div class="hero-signal"></div>
         <img src="/assets/hero-kaizen.png" alt=""/>
+        <div class="hero-scan"></div>
       </div>
     </section>
 
